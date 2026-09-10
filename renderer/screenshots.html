@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: http: blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Work screenshots</title>
+  <style>
+    :root { color-scheme: light; --bg:#f4f6f8; --card:#fff; --text:#152033; --muted:#5b677a; --line:#e3e8ef; --accent:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 20px 24px 8px; }
+    h1 { margin: 0 0 12px; font-size: 1.35rem; }
+    .filters, .login { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .login { margin: 0 0 16px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; max-width: 720px; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+    input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 180px; }
+    button { font: inherit; border: 0; background: var(--accent); color: #fff; padding: 9px 14px; border-radius: 8px; cursor: pointer; }
+    .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
+    .error { color: #b91c1c; padding: 0 24px; }
+    .ok { color: #047857; padding: 0 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 16px 24px 32px; }
+    article { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; }
+    article:hover { border-color: var(--accent); }
+    article img { width: 100%; height: 150px; object-fit: cover; background: #e2e8f0; display: block; }
+    article div { padding: 10px 12px 12px; font-size: 0.85rem; }
+    article strong { display: block; font-size: 0.95rem; }
+    article span { color: var(--muted); display: block; margin-top: 4px; }
+    .lightbox {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px; z-index: 40;
+    }
+    .lightbox[hidden] { display: none; }
+    .lightbox img { max-width: 96vw; max-height: 86vh; object-fit: contain; background: #000; border-radius: 8px; }
+    .lightbox .bar { color: #fff; margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .lightbox button { background: #fff; color: #152033; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Work screenshots</h1>
+    <form class="login" id="loginForm">
+      <label>Admin email
+        <input type="email" id="email" required autocomplete="username" />
+      </label>
+      <label>Password
+        <input type="password" id="password" required autocomplete="current-password" />
+      </label>
+      <button type="submit" id="signIn">Sign in</button>
+    </form>
+    <p class="hint">Use an admin account from this CRM. You can also sign in on the Admin portal in this app, then click Load screenshots.</p>
+    <div class="filters">
+      <label>Date
+        <input type="date" id="date" />
+      </label>
+      <label>Employee
+        <select id="employeeId">
+          <option value="">All employees</option>
+        </select>
+      </label>
+      <button type="button" id="load">Load screenshots</button>
+    </div>
+  </header>
+  <p class="ok" id="status" hidden></p>
+  <p class="error" id="error" hidden></p>
+  <section class="grid" id="grid"></section>
+  <div class="lightbox" id="lightbox" hidden>
+    <img id="lightboxImg" alt="Full screenshot" />
+    <div class="bar">
+      <span id="lightboxCaption"></span>
+      <button type="button" id="lightboxClose">Close</button>
+    </div>
+  </div>
+  <script src="./screenshots.js"></script>
+</body>
+</html>
