@@ -35,6 +35,17 @@ export function portalDistExists(id) {
   return fs.existsSync(index)
 }
 
+function portInUseError(port, cause) {
+  const err = new Error(
+    `Port ${port} is already in use on 127.0.0.1. Close the other app using that port ` +
+      `(installed CRM Admin, another Electron instance, or admin-portal Vite) so this app can serve the local portals/admin build.`,
+  )
+  err.code = 'EADDRINUSE'
+  err.port = port
+  err.cause = cause
+  return err
+}
+
 export function createStaticServer(root, port) {
   const server = http.createServer((req, res) => {
     let file = safeJoin(root, req.url)
@@ -60,7 +71,13 @@ export function createStaticServer(root, port) {
     })
   })
   return new Promise((resolve, reject) => {
-    server.once('error', reject)
+    server.once('error', (err) => {
+      if (err?.code === 'EADDRINUSE') {
+        reject(portInUseError(port, err))
+        return
+      }
+      reject(err)
+    })
     server.listen(port, '127.0.0.1', () => resolve(server))
   })
 }
@@ -70,7 +87,18 @@ export async function startPortalServers() {
   for (const spec of Object.values(PORTALS)) {
     const root = path.join(portalsRoot(), spec.folder)
     if (!fs.existsSync(path.join(root, 'index.html'))) continue
-    servers.push(await createStaticServer(root, spec.port))
+    try {
+      servers.push(await createStaticServer(root, spec.port))
+    } catch (err) {
+      for (const started of servers) {
+        try {
+          started.close()
+        } catch {
+          /* ignore */
+        }
+      }
+      throw err
+    }
   }
   return servers
 }

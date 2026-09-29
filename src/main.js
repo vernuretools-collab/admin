@@ -8,9 +8,10 @@ import { signInWithPassword } from './attendance.js'
 import { readSessionFromWindow } from './session.js'
 import { portalDistExists, portalUrl, startPortalServers } from './staticServers.js'
 import { appIcon, trayIcon } from './appIcon.js'
+import { setupAutoUpdater } from './updater.js'
 
 const require = createRequire(import.meta.url)
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell, session } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell, session, Notification } = require('electron')
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const preloadPath = path.join(__dirname, 'preload.cjs')
@@ -22,6 +23,38 @@ const windows = {
 
 let tray = null
 let servers = []
+let portalServersReady = false
+let isQuitting = false
+const recentNativeTags = new Map()
+const NATIVE_TAG_TTL_MS = 30_000
+
+function hideInsteadOfClose(win) {
+  win.on('close', (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+    win.hide()
+  })
+}
+
+function normalizePortalPath(routePath = '') {
+  const raw = String(routePath || '').trim()
+  if (!raw) return ''
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const u = new URL(raw)
+      return `${u.pathname}${u.search}${u.hash}`
+    }
+  } catch {
+    /* keep raw path */
+  }
+  return raw.startsWith('/') ? raw : `/${raw}`
+}
+
+function portalHref(routePath = '') {
+  const base = portalUrl(APP_ID)
+  const trimmed = String(routePath || '').replace(/^\//, '')
+  return trimmed ? `${base}${trimmed}` : base
+}
 
 function createTray() {
   tray = new Tray(trayIcon())
@@ -72,7 +105,14 @@ function showGallery() {
   return win
 }
 
-async function openPortal() {
+async function openPortal({ show = true, path: routePath = '' } = {}) {
+  if (!portalServersReady) {
+    await dialog.showErrorBox(
+      'Admin portal unavailable',
+      'The local admin server is not running. Port 3001 may be in use by another CRM Admin or Vite process. Close that app and restart with npm run dev.',
+    )
+    return
+  }
   if (!portalDistExists(APP_ID)) {
     await dialog.showErrorBox(
       'Portal missing',
@@ -81,24 +121,54 @@ async function openPortal() {
     return
   }
   if (windows.portal && !windows.portal.isDestroyed()) {
-    windows.portal.show()
-    windows.portal.focus()
+    if (show) {
+      if (routePath) windows.portal.loadURL(portalHref(routePath))
+      windows.portal.show()
+      windows.portal.focus()
+    }
     return windows.portal
   }
   const win = new BrowserWindow({
-    ...browserOpts({ sandbox: true }),
+    ...browserOpts({ preload: preloadPath, sandbox: false }),
     title: `${APP_LABEL} portal`,
+    show,
   })
   windows.portal = win
+  hideInsteadOfClose(win)
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
-  win.loadURL(portalUrl(APP_ID))
+  win.loadURL(portalHref(routePath))
   win.on('closed', () => {
     windows.portal = null
   })
   return win
+}
+
+function showNativeNotification(payload = {}) {
+  const title = String(payload.title || APP_LABEL).trim() || APP_LABEL
+  const body = String(payload.body || '')
+  const tag = String(payload.tag || `${title}:${body}`)
+  const now = Date.now()
+  const last = recentNativeTags.get(tag)
+  if (last && now - last < NATIVE_TAG_TTL_MS) return false
+  recentNativeTags.set(tag, now)
+  for (const [key, at] of recentNativeTags) {
+    if (now - at > NATIVE_TAG_TTL_MS) recentNativeTags.delete(key)
+  }
+  if (!Notification.isSupported()) return false
+  const n = new Notification({
+    title,
+    body,
+    icon: appIcon(),
+    silent: false,
+  })
+  n.on('click', () => {
+    void openPortal({ show: true, path: normalizePortalPath(payload.link) })
+  })
+  n.show()
+  return true
 }
 
 function cachedSessionPath() {
@@ -159,6 +229,21 @@ function registerIpc() {
     const session = await sessionForGallery()
     return signedScreenshotUrl(session, storagePath)
   })
+  ipcMain.handle('desktop:showNotification', async (_event, payload) => showNativeNotification(payload || {}))
+  ipcMain.handle('desktop:saveFile', async (event, payload) => {
+    const filename = path.basename(String(payload?.filename || 'report.xlsx'))
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showSaveDialog(win || undefined, {
+      title: 'Save monthly report',
+      defaultPath: filename,
+      filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }],
+    })
+    if (result.canceled || !result.filePath) return { saved: false }
+    const data = payload?.data
+    const buffer = Buffer.from(data instanceof Uint8Array ? data : new Uint8Array(data || []))
+    fs.writeFileSync(result.filePath, buffer)
+    return { saved: true, filePath: result.filePath }
+  })
 }
 
 app.setName('CRM Admin')
@@ -182,11 +267,21 @@ app.whenReady().then(async () => {
   registerIpc()
   try {
     servers = await startPortalServers()
+    portalServersReady = true
   } catch (err) {
-    console.warn('[servers]', err)
+    portalServersReady = false
+    console.error('[servers]', err)
+    const portHint =
+      err?.code === 'EADDRINUSE'
+        ? err.message
+        : `Could not start the admin portal server on 127.0.0.1:3001.\n\n${err?.message || err}`
+    await dialog.showErrorBox('Admin portal port busy', portHint)
   }
   createTray()
-  await openPortal()
+  setupAutoUpdater()
+  if (portalServersReady) {
+    await openPortal()
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openPortal()
   })
@@ -197,6 +292,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   for (const server of servers) {
     try {
       server.close()

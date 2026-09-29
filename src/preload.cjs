@@ -6,4 +6,6 @@ contextBridge.exposeInMainWorld('desktop', {
   listEmployees: () => ipcRenderer.invoke('desktop:listEmployees'),
   signedUrl: (storagePath) => ipcRenderer.invoke('desktop:signedUrl', storagePath),
   adminLogin: (credentials) => ipcRenderer.invoke('desktop:adminLogin', credentials),
+  showNotification: (payload) => ipcRenderer.invoke('desktop:showNotification', payload),
+  saveFile: (payload) => ipcRenderer.invoke('desktop:saveFile', payload),
 })
