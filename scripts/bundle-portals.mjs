@@ -5,9 +5,12 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const desktopRoot = path.resolve(__dirname, '..')
-const crmRoot = process.env.CRM_ROOT
-  ? path.resolve(process.env.CRM_ROOT)
-  : path.resolve(desktopRoot, '..', 'new-crm-supabase')
+const crmCandidates = [
+  process.env.CRM_ROOT ? path.resolve(process.env.CRM_ROOT) : null,
+  path.resolve(desktopRoot, '..', 'new-crm-supabase'),
+  path.resolve(desktopRoot, '..', '..', '..', '..', 'Crm web', 'halo-erp'),
+].filter(Boolean)
+const crmRoot = crmCandidates.find((dir) => fs.existsSync(path.join(dir, 'admin-portal', 'package.json')))
 
 const PORTAL = { name: 'admin-portal', dest: 'admin' }
 
@@ -28,8 +31,8 @@ function copyDir(src, dest) {
   fs.cpSync(src, dest, { recursive: true })
 }
 
-if (!fs.existsSync(crmRoot)) {
-  console.error(`CRM repo not found at ${crmRoot}. Set CRM_ROOT to the new-crm-supabase path.`)
+if (!crmRoot) {
+  console.error('CRM repo not found. Set CRM_ROOT to the halo-erp path that contains admin-portal.')
   process.exit(1)
 }
 
