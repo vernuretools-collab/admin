@@ -6,12 +6,25 @@ const employeeEl = document.getElementById('employeeId')
 const lightbox = document.getElementById('lightbox')
 const lightboxImg = document.getElementById('lightboxImg')
 const lightboxCaption = document.getElementById('lightboxCaption')
+const prevBtn = document.getElementById('lightboxPrev')
+const nextBtn = document.getElementById('lightboxNext')
 
-function openFullView(src, caption) {
-  if (!src) return
-  lightboxImg.src = src
-  lightboxCaption.textContent = caption || ''
+let shots = []
+let currentIndex = 0
+
+function showIndex(index) {
+  if (!shots.length) return
+  currentIndex = Math.max(0, Math.min(index, shots.length - 1))
+  const shot = shots[currentIndex]
+  lightboxImg.src = shot.src || ''
+  lightboxCaption.textContent = shot.caption || ''
   lightbox.hidden = false
+  prevBtn.disabled = currentIndex <= 0
+  nextBtn.disabled = currentIndex >= shots.length - 1
+}
+
+function openFullView(index) {
+  showIndex(index)
 }
 
 function closeFullView() {
@@ -19,13 +32,30 @@ function closeFullView() {
   lightboxImg.src = ''
 }
 
+function step(delta) {
+  if (lightbox.hidden) return
+  showIndex(currentIndex + delta)
+}
+
+prevBtn.addEventListener('click', (event) => {
+  event.stopPropagation()
+  step(-1)
+})
+nextBtn.addEventListener('click', (event) => {
+  event.stopPropagation()
+  step(1)
+})
+
 lightbox.addEventListener('click', (event) => {
   if (event.target === lightbox || event.target === document.getElementById('lightboxClose')) {
     closeFullView()
   }
 })
 document.addEventListener('keydown', (event) => {
+  if (lightbox.hidden) return
   if (event.key === 'Escape') closeFullView()
+  if (event.key === 'ArrowLeft') step(-1)
+  if (event.key === 'ArrowRight') step(1)
 })
 
 function cleanError(err) {
@@ -56,6 +86,7 @@ function showStatus(message) {
 async function load() {
   showError('')
   grid.innerHTML = ''
+  shots = []
   try {
     const rows = await window.desktop.listScreenshots({
       date: dateEl.value || undefined,
@@ -65,7 +96,11 @@ async function load() {
       showError('No screenshots yet. Confirm CRM Employee tray says Monitoring, wait one minute, then click Load screenshots. Leave Date empty to see all recent captures.')
       return
     }
-    for (const row of rows) {
+    shots = rows.map((row) => ({
+      src: '',
+      caption: `${row.displayName || 'Unknown employee'} · ${new Date(row.captured_at).toLocaleString()}`,
+    }))
+    rows.forEach((row, index) => {
       const article = document.createElement('article')
       const img = document.createElement('img')
       img.alt = 'Work screenshot'
@@ -76,18 +111,19 @@ async function load() {
       when.textContent = new Date(row.captured_at).toLocaleString()
       meta.append(name, when)
       article.append(img, meta)
-      const caption = `${row.displayName || 'Unknown employee'} · ${new Date(row.captured_at).toLocaleString()}`
-      article.addEventListener('click', () => openFullView(img.src, caption))
+      article.addEventListener('click', () => openFullView(index))
       grid.append(article)
       window.desktop
         .signedUrl(row.storage_path)
         .then((url) => {
+          shots[index].src = url
           img.src = url
+          if (!lightbox.hidden && currentIndex === index) lightboxImg.src = url
         })
         .catch(() => {
           img.alt = 'Could not load image'
         })
-    }
+    })
   } catch (err) {
     showError(cleanError(err))
   }

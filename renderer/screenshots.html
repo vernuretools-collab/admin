@@ -32,9 +32,18 @@
       padding: 24px; z-index: 40;
     }
     .lightbox[hidden] { display: none; }
-    .lightbox img { max-width: 96vw; max-height: 86vh; object-fit: contain; background: #000; border-radius: 8px; }
+    .lightbox img { max-width: calc(100vw - 160px); max-height: 86vh; object-fit: contain; background: #000; border-radius: 8px; }
     .lightbox .bar { color: #fff; margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
-    .lightbox button { background: #fff; color: #152033; }
+    .lightbox .bar button { background: #fff; color: #152033; }
+    .lightbox .nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 52px; height: 88px; padding: 0;
+      border-radius: 12px; background: rgba(255, 255, 255, 0.94); color: #152033;
+      font-size: 2.4rem; line-height: 1; display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox .nav.prev { left: 16px; }
+    .lightbox .nav.next { right: 16px; }
+    .lightbox .nav:disabled { opacity: 0.35; cursor: default; }
   </style>
 </head>
 <body>
@@ -66,7 +75,9 @@
   <p class="error" id="error" hidden></p>
   <section class="grid" id="grid"></section>
   <div class="lightbox" id="lightbox" hidden>
+    <button type="button" class="nav prev" id="lightboxPrev" aria-label="Previous screenshot">‹</button>
     <img id="lightboxImg" alt="Full screenshot" />
+    <button type="button" class="nav next" id="lightboxNext" aria-label="Next screenshot">›</button>
     <div class="bar">
       <span id="lightboxCaption"></span>
       <button type="button" id="lightboxClose">Close</button>
